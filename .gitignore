@@ -1,0 +1,34 @@
+# Виртуальное окружение Python (никогда не загружаем его!)
+venv/
+.venv/
+env/
+
+# Скомпилированные файлы Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Файлы macOS (скрытые системные файлы)
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE и редакторы кода
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Логи и временные файлы
+*.log
+.env
+.env.local
+
+# База данных 
+*.sqlite3
+*.db
+
+# --- Мои личные текстовые файлы ---
+test.txt
+
+
