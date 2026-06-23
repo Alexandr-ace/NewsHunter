@@ -4,10 +4,11 @@ import telebot
 import threading
 import time
 
-BOT_TOKEN = "ВСТАВЬ_СВОЙ_ТЕЛЕГРАМ_ТОКЕН"
+BOT_TOKEN = " "
 url = "https://habr.com/ru/rss/all/all/?fl=ru"
 bot = telebot.TeleBot(BOT_TOKEN)
 user_keywords = {}  # {chat_id: [list of keywords]}
+sent_news = {}  # {chat_id: set(news_ids)}
 
 
 @bot.message_handler(commands=['start'])
@@ -48,13 +49,20 @@ def send_news(message):
             message.chat.id, "❌ У вас нет ключевых слов. Используйте /add для добавления")
         return
 
+    # Получаем id новостей
+    # user_sent = sent_news.get(message.chat.id, set())
+
     found_count = 0
     for entry in v.entries:
+        # if entry.id in user_sent:
+        #     continue  # Пропускаем
+
         title = str(entry.title).lower()
         summary = str(entry.summary).lower()
 
         for keyword in user_kws:  # ← Итерируем по ключевым словам пользователя
             if keyword in title or keyword in summary:
+                # user_sent.add(entry.id)
                 news_text = (
                     f"✅ Найдено совпадение: {keyword}\n"
                     f"📰 {entry.title}\n"
@@ -68,6 +76,7 @@ def send_news(message):
         bot.send_message(
             message.chat.id, "❌ Новостей с вашими ключевыми словами не найдено")
     else:
+        # sent_news[message.chat.id] = user_sent
         bot.send_message(
             message.chat.id, f"📊 Всего найдено: {found_count} новостей")
 
@@ -151,33 +160,40 @@ def check_rss_background():
         try:
             # 1. Скачиваем RSS один раз
             response = requests.get(url)
-            
+
             if response.status_code != 200:
-                print(f"❌ Не удалось получить RSS. Код: {response.status_code}")
+                print(
+                    f"❌ Не удалось получить RSS. Код: {response.status_code}")
                 time.sleep(1800)
                 continue  # Пропускаем этот цикл проверки
-            
+
             v = feedparser.parse(response.text)
-            
+
             if not v.entries:
                 print("❌ Лента новостей пуста")
                 time.sleep(1800)
                 continue
-            
+
             # 2. Проходим по всем пользователям
             for chat_id, keywords in list(user_keywords.items()):
                 # Пропускаем пользователей без ключевых слов
                 if not keywords:
                     continue
-                
+
+                # Получаем индивидуальное множество
+                user_sent = sent_news.get(chat_id, set())
+
                 # 3. Проверяем новости для этого пользователя
                 found_count = 0
                 for entry in v.entries:
-                    title = str(entry.title).lower() 
+                    if entry.id in user_sent:
+                        continue
+                    title = str(entry.title).lower()
                     summary = str(entry.summary).lower()
-                    
+
                     for keyword in keywords:
                         if keyword in title or keyword in summary:
+                            user_sent.add(entry.id)
                             news_text = (
                                 f"✅ Найдено совпадение: {keyword}\n"
                                 f"📰 {entry.title}\n"
@@ -186,14 +202,16 @@ def check_rss_background():
                             bot.send_message(chat_id, news_text)
                             found_count += 1
                             break
-                
+
                 # 4. Отправляем итог только если что-то нашли
+                sent_news[chat_id] = user_sent
                 if found_count > 0:
-                    bot.send_message(chat_id, f"📊 Всего найдено: {found_count} новостей")
-            
+                    bot.send_message(
+                        chat_id, f"📊 Всего найдено: {found_count} новостей")
+
             # 5. Спим 30 минут
             time.sleep(1800)
-        
+
         except Exception as e:
             print(f"❌ Ошибка в фоновой проверке: {e}")
             time.sleep(1800)  # Даже при ошибке продолжаем работу
@@ -205,7 +223,3 @@ background_thread.start()
 print("🤖 Бот запущен и ожидает сообщений...")
 # Запускаем бота в режиме постоянного опроса серверов Telegram
 bot.polling(none_stop=True)
-
-
-
-
