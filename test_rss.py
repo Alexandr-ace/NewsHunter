@@ -3,9 +3,15 @@ import feedparser
 import telebot
 import threading
 import time
+import os
+from dotenv import load_dotenv
 
-BOT_TOKEN = " "
-url = "https://habr.com/ru/rss/all/all/?fl=ru"
+load_dotenv()
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("ОШИБКА: Переменная BOT_TOKEN не найдена в окружении! Проверь файл .env")
+url = os.environ.get("RSS_URL", "https://default-rss.com")
 bot = telebot.TeleBot(BOT_TOKEN)
 user_keywords = {}  # {chat_id: [list of keywords]}
 sent_news = {}  # {chat_id: set(news_ids)}

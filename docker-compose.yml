@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  news-bot:
+    build: .
+    container_name: news_tel_bot
+    restart: always
+    # Порты не пробрасываем — бот сам выходит в интернет
+    # Чтобы видеть логи, добавим:
+    stdin_open: true
+    tty: true
+    # Подключаем файл с секретами (токен бота и т.д.), чтобы не светить их в коде
+    env_file:
+      - .env 
