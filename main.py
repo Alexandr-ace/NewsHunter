@@ -5,6 +5,17 @@ import threading
 import time
 import os
 from dotenv import load_dotenv
+from db import (
+    init_db,
+    get_user_keywords,
+    add_keywords_to_db,
+    delete_keywords_from_db,
+    clear_keywords_from_db,
+    get_all_users_with_keywords,
+    get_sent_news_ids,
+    add_sent_news_to_db,
+    clear_sent_news_from_db
+)
 
 load_dotenv()
 
@@ -13,8 +24,10 @@ if not BOT_TOKEN:
     raise ValueError("ОШИБКА: Переменная BOT_TOKEN не найдена в окружении! Проверь файл .env")
 url = os.environ.get("RSS_URL", "https://default-rss.com")
 bot = telebot.TeleBot(BOT_TOKEN)
-user_keywords = {}  # {chat_id: [list of keywords]}
-sent_news = {}  # {chat_id: set(news_ids)}
+# user_keywords = {}  # {chat_id: [list of keywords]}
+# sent_news = {}  # {chat_id: set(news_ids)}
+
+
 
 
 @bot.message_handler(commands=['start'])
@@ -48,7 +61,7 @@ def send_news(message):
         return
 
     # Получаем ключевые слова конкретного пользователя
-    user_kws = user_keywords.get(message.chat.id, [])
+    user_kws = get_user_keywords(message.chat.id)
 
     if not user_kws:
         bot.send_message(
@@ -89,7 +102,7 @@ def send_news(message):
 
 @bot.message_handler(commands=['list'])
 def send_list(message):
-    keywords = user_keywords.get(message.chat.id, [])
+    keywords = get_user_keywords(message.chat.id)
     if not keywords:
         bot.send_message(message.chat.id, "❌ Ваш список ключевых слов пуст")
         return
@@ -102,7 +115,7 @@ def send_list(message):
 @bot.message_handler(commands=['add'])
 def add_key_word(message):
     # 1. Получаем текущие ключевые слова
-    keywords = user_keywords.get(message.chat.id, [])
+    keywords = get_user_keywords(message.chat.id)
 
     # 2. Разбираем команду (пропускаем саму команду /add)
     # ['/add', 'python', 'fastapi'] → ['python', 'fastapi']
@@ -119,8 +132,9 @@ def add_key_word(message):
         bot.send_message(
             message.chat.id, "ℹ️ Все эти слова уже есть в вашем списке")
         return
-    # 4. Добавляем новые слова (set удаляет дубликаты)
-    user_keywords[message.chat.id] = list(set(keywords + parts))
+    # 4. Добавляем новые слова
+    add_keywords_to_db(message.chat.id, new_words)
+    clear_sent_news_from_db(message.chat.id)
 
     # 5. Отправляем подтверждение
     bot.send_message(
@@ -130,7 +144,7 @@ def add_key_word(message):
 @bot.message_handler(commands=['delete'])
 def delete_key_word(message):
     # 1. Получаем текущие ключевые слова
-    keywords = user_keywords.get(message.chat.id, [])
+    keywords = get_user_keywords(message.chat.id)
 
     # 2. Разбираем команду (пропускаем саму команду /delete)
     parts = [word.lower() for word in message.text.split()[1:]]
@@ -143,10 +157,11 @@ def delete_key_word(message):
 
     # 4. Проверяем, есть ли хоть одно слово в списке
     if any(word in keywords for word in parts):
-        result = [x for x in keywords if x not in parts]
-        user_keywords[message.chat.id] = result
+        result = [x for x in keywords if x in parts]
+        delete_keywords_from_db(message.chat.id, result)
+        
         bot.send_message(
-            message.chat.id, f"✅ Слова удалены: {', '.join(parts)}")
+            message.chat.id, f"✅ Слова удалены: {', '.join(result)}")
     else:
         bot.send_message(
             message.chat.id, "❌ Таких слов нет в вашем списке ключевых слов")
@@ -154,10 +169,11 @@ def delete_key_word(message):
 
 @bot.message_handler(commands=['clear'])
 def clear_keywords(message):
-    if not user_keywords.get(message.chat.id, []):
+    if not get_user_keywords(message.chat.id):
         bot.send_message(message.chat.id, "ℹ️ Список уже пуст")
         return
-    user_keywords[message.chat.id] = []
+    clear_keywords_from_db(message.chat.id)
+    clear_sent_news_from_db(message.chat.id)
     bot.send_message(message.chat.id, "🗑️ Все ключевые слова удалены")
 
 
@@ -181,13 +197,13 @@ def check_rss_background():
                 continue
 
             # 2. Проходим по всем пользователям
-            for chat_id, keywords in list(user_keywords.items()):
+            for chat_id, keywords in get_all_users_with_keywords().items():
                 # Пропускаем пользователей без ключевых слов
                 if not keywords:
                     continue
 
                 # Получаем индивидуальное множество
-                user_sent = sent_news.get(chat_id, set())
+                user_sent = get_sent_news_ids(chat_id)
 
                 # 3. Проверяем новости для этого пользователя
                 found_count = 0
@@ -199,7 +215,7 @@ def check_rss_background():
 
                     for keyword in keywords:
                         if keyword in title or keyword in summary:
-                            user_sent.add(entry.id)
+                            add_sent_news_to_db(chat_id, entry.id)
                             news_text = (
                                 f"✅ Найдено совпадение: {keyword}\n"
                                 f"📰 {entry.title}\n"
@@ -210,7 +226,6 @@ def check_rss_background():
                             break
 
                 # 4. Отправляем итог только если что-то нашли
-                sent_news[chat_id] = user_sent
                 if found_count > 0:
                     bot.send_message(
                         chat_id, f"📊 Всего найдено: {found_count} новостей")
@@ -226,6 +241,7 @@ def check_rss_background():
 # Запускаем фоновую проверку
 background_thread = threading.Thread(target=check_rss_background, daemon=True)
 background_thread.start()
+init_db()
 print("🤖 Бот запущен и ожидает сообщений...")
 # Запускаем бота в режиме постоянного опроса серверов Telegram
 bot.polling(none_stop=True)

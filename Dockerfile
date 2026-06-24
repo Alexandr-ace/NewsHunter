@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 4. Копируем весь остальной код проекта в контейнер
 COPY . .
 # 5. Команда запуска Telegram-бота
-CMD ["python", "test_rss.py"]
+CMD ["python", "main.py"]

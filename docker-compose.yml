@@ -5,10 +5,23 @@ services:
     build: .
     container_name: news_tel_bot
     restart: always
-    # Порты не пробрасываем — бот сам выходит в интернет
-    # Чтобы видеть логи, добавим:
-    stdin_open: true
-    tty: true
-    # Подключаем файл с секретами (токен бота и т.д.), чтобы не светить их в коде
     env_file:
-      - .env 
+      - .env
+    depends_on:
+      - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: news_bot_db
+    restart: always
+    environment:
+      POSTGRES_DB: news_bot
+      POSTGRES_USER: bot_user
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
