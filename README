@@ -1,0 +1,21 @@
+# News Hunter Bot
+
+Telegram-бот для мониторинга статей на Хабре по ключевым словам.
+
+## Возможности
+- ✅ Подписка на ключевые слова
+- ✅ Автоматическая проверка RSS каждые 30 минут
+- ✅ Inline-кнопки для удобного управления
+- ✅ PostgreSQL для хранения данных
+- ✅ Docker-упаковка
+
+## Технологии
+- Python 3.12
+- pyTelegramBotAPI
+- PostgreSQL
+- Docker & Docker Compose
+- feedparser
+
+## Запуск
+```bash
+docker-compose up --build -d
